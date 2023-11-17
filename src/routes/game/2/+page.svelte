@@ -95,7 +95,7 @@
         ws = new WebSocket(PUBLIC_WEBSOCKET);
         ws.onopen = () => {
             ws?.send(JSON.stringify({
-                "type": "GMD"
+                "Protocol": "Reset"
             }));
         }
 
@@ -121,7 +121,6 @@
         function refresh(){
             // Move Paddle
             const clamp = (num: number, min: number, max: number): number => Math.min(Math.max(num, min), max);
-
             if (move) {
                 moveRuns++;
                 if (moveY > middleY) {
@@ -141,22 +140,22 @@
                 }
             }
 
+            // Send data to server
             let gameObj = {
-                "type": "SD",
-                "current": player,
-                "P1X": player === 1? p1el?.offsetLeft : p2el?.offsetLeft,
-                "P1Y": player === 1? p1el?.offsetTop : p2el?.offsetLeft,
-                "P2X": player === 2? p2el?.offsetLeft : p1el?.offsetLeft,
-                "P2Y": player === 2? p2el?.offsetTop : p1el?.offsetLeft,
-                "PH": paddleHeight,
-                "BX": bel?.offsetLeft,
-                "BY": bel?.offsetTop,
-                "BR": ballRadius,
-                "CW": canvasWidth,
-                "CH": canvasHeight
+                "Protocol": "GameData",
+                "CurrentPlayer": player,
+                "1XPos": player === 1? p1el?.offsetLeft : p2el?.offsetLeft,
+                "1YPos": player === 1? p1el?.offsetTop : p2el?.offsetLeft,
+                "2XPos": player === 2? p2el?.offsetLeft : p1el?.offsetLeft,
+                "2YPos": player === 2? p2el?.offsetTop : p1el?.offsetLeft,
+                "PaddleHeight": paddleHeight,
+                "BallXPos": bel?.offsetLeft,
+                "BallYPos": bel?.offsetTop,
+                "BallRadius": ballRadius,
+                "CanvasWidth": canvasWidth,
+                "CanvasHeight": canvasHeight
             }
 
-            // Neue positionen
             ws?.send(JSON.stringify(gameObj));
         }
 
@@ -164,44 +163,33 @@
         ws.onmessage = (ev) => {
             let wsdata = JSON.parse(ev.data)
             switch (wsdata.types) {
-              // Datenabfrage
-                case "GMD":
-                    if (gameStarted)
-                        refresh();
-                    if (playerReady && !gameStarted)
-                        ws?.send(JSON.stringify({
-                            "type": "SB",
-                            "current": player
-                        }));
-                    else
-                        ws?.send(JSON.stringify({
-                            "type": "GMD",
-                            "current": player
-                        }));
-                    break;
-              // SpielDaten
-                case "SD":
-                    if (wsdata.P2Y)
-                        opponent.update(wsdata.P2Y ?? 0)
+                case "GameStart":
+                    gameStarted = true;
+                    yourself.update(player === 1? wsdata.P1Y : wsdata.P2Y)
+                    opponent.update(player === 2? wsdata.P1Y : wsdata.P2Y)
                     ball.update(wsdata.BX, wsdata.BY)
                     break;
-              // SpielStart
-                case "SS":
-                    winner = 0;
-                    gameStarted = true;
+                case "GameData":
+                    yourself.update(player === 1? wsdata.P1Y : wsdata.P2Y)
+                    opponent.update(player === 2? wsdata.P1Y : wsdata.P2Y)
+                    ball.update(wsdata.BX, wsdata.BY)
                     break;
-              // SpielEnde
-                case "SE":
+                case "GameEnd":
+                    winner = wsdata.CurrentPlayer;
                     gameStarted = false;
                     playerReady = false;
-                    winner = wsdata.current;
                     break;
-              // DesignAktualisierung
-              // TODO: Design aktualisieren
-                case "DA":
+                case "GameReset":
+                    winner = 0;
+                    gameStarted = false;
+                    playerReady = false;
                     break;
             }
         }
+
+        setInterval(function(){
+            refresh();
+        }, 66.6);
 
         // Event listeners
         if (browser) {
